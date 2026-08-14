@@ -10,6 +10,7 @@ Initial release.
 - Narrowing on ~g~ git checkout roots, ~w~ worktrees, ~d~ entries whose directory is gone. Worktrees and submodules are told apart by reading the gitdir their ~.git~ file names, resolved against the directory to cope with the relative form submodules use.
 - Dead entries are excluded by default and included under a prefix argument, so they can be narrowed to and pruned.
 - ~consult-zoxide-remove~ drops entries in one batched call and refuses any bulk removal that includes a directory which still exists.
-- ~consult-zoxide-directories~ returns the bare path list, for feeding another completion source such as ~consult-dir~.
+- ~consult-zoxide-directories~ returns the bare path list, for feeding another completion source.
+- A self-registering ~consult-dir~ source, appended to ~consult-dir-sources~ under the ~z~ narrowing key once ~consult-dir~ loads, with no hard dependency on it.
 - ~consult-zoxide-track-mode~ teaches zoxide about directories visited in Dired.
 - Optional, self-registering Embark integration in ~consult-zoxide-embark~: the ~consult-zoxide-dir~ category inherits ~embark-file-map~, removal is a multi-target action on ~\~, and the on-disk deletion keys are shadowed.

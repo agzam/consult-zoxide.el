@@ -66,6 +66,12 @@ It gives the ~consult-zoxide-dir~ category a keymap inheriting from ~embark-file
 
 ~d~ and ~D~ are shadowed to nil. They delete a directory off disk, and that has no business sitting one keystroke away from forgetting its history entry. Dired is where directories get deleted.
 
+* consult-dir
+
+If [[https://github.com/karthink/consult-dir][consult-dir]] is around, a "Zoxide" source is appended to ~consult-dir-sources~ as soon as it loads, reachable under the ~z~ narrowing key. Like the Embark integration this registers itself and consult-dir is not a dependency, so there is nothing to set up and nothing to break if you do not use it.
+
+The source is ~consult-zoxide-directory-source~, should you want to reorder or replace it.
+
 * Installation
 
 Requires the ~zoxide~ binary on ~PATH~.
@@ -95,16 +101,7 @@ Only Dired is hooked. ~consult-zoxide-track~ works in file buffers too, and you 
 | ~consult-zoxide-track~       | record the current buffer's directory                           |
 | ~consult-zoxide-track-mode~  | do that automatically for Dired                                 |
 
-~consult-zoxide-directories~ takes no required arguments, so it drops straight into a [[https://github.com/karthink/consult-dir][consult-dir]] source:
-
-#+begin_src emacs-lisp
-(defvar consult-dir--source-zoxide
-  `(:name "Zoxide" :narrow ?z :category file :face consult-file
-    :enabled ,(lambda () (executable-find "zoxide"))
-    :items consult-zoxide-directories))
-
-(add-to-list 'consult-dir-sources 'consult-dir--source-zoxide t)
-#+end_src
+~consult-zoxide-directories~ takes no required arguments, which is what makes it usable as a source's ~:items~ - see consult-dir below.
 
 ~consult-zoxide-read~ takes an optional query, which is handed to zoxide's own matcher and skips the prompt entirely when it singles out one directory - the shell ~z~ contract. That makes an Eshell ~z~ a one-liner:
 

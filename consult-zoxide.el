@@ -318,5 +318,32 @@ you open, which fills the database faster than it is worth."
       (add-hook 'dired-after-readin-hook #'consult-zoxide-track)
     (remove-hook 'dired-after-readin-hook #'consult-zoxide-track)))
 
+;;;; consult-dir
+
+(defvar consult-dir-sources)
+
+(defvar consult-zoxide-directory-source
+  `( :name     "Zoxide"
+     :narrow   ?z
+     :category file
+     :face     consult-file
+     :enabled  ,(lambda () (executable-find consult-zoxide-executable))
+     :items    consult-zoxide-directories)
+  "Zoxide source for `consult-dir-sources'.
+Appended as soon as `consult-dir' loads, so it needs no setting up.")
+
+;;;###autoload
+(defun consult-zoxide-consult-dir-register ()
+  "Append the zoxide source to `consult-dir-sources'."
+  (add-to-list 'consult-dir-sources 'consult-zoxide-directory-source t))
+
+;; Same arrangement as the Embark integration: the cookie copies this into
+;; the generated autoloads, so the source appears for anyone who has
+;; `consult-dir' without a manual require, and nothing here loads until
+;; `consult-dir' itself does.
+;;;###autoload
+(with-eval-after-load 'consult-dir
+  (consult-zoxide-consult-dir-register))
+
 (provide 'consult-zoxide)
 ;;; consult-zoxide.el ends here

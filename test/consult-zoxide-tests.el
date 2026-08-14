@@ -106,6 +106,39 @@
     (expect (spy-calls-args-for 'consult-zoxide--call 0)
             :to-equal '(t "query" "--list" "--score" "--all" "q"))))
 
+;; consult-dir is not a dependency, so stand its source list up here;
+;; a buttercup :var would only bind it lexically, where `add-to-list'
+;; cannot see it
+(defvar consult-dir-sources nil)
+
+(describe "the consult-dir source"
+  (before-each (setq consult-dir-sources nil))
+
+  (it "describes itself as a file source under the z key"
+    (expect (plist-get consult-zoxide-directory-source :name) :to-equal "Zoxide")
+    (expect (plist-get consult-zoxide-directory-source :narrow) :to-equal ?z)
+    (expect (plist-get consult-zoxide-directory-source :category) :to-be 'file)
+    (expect (plist-get consult-zoxide-directory-source :items)
+            :to-be #'consult-zoxide-directories))
+
+  (it "disables itself where zoxide is not installed"
+    (spy-on 'executable-find :and-return-value nil)
+    (expect (funcall (plist-get consult-zoxide-directory-source :enabled)) :to-be nil)
+    (spy-on 'executable-find :and-return-value "/usr/bin/zoxide")
+    (expect (funcall (plist-get consult-zoxide-directory-source :enabled))
+            :to-be-truthy))
+
+  (it "appends itself, so it lands after consult-dir's own sources"
+    (setq consult-dir-sources '(consult-dir--source-recentf))
+    (consult-zoxide-consult-dir-register)
+    (expect consult-dir-sources
+            :to-equal '(consult-dir--source-recentf consult-zoxide-directory-source)))
+
+  (it "is idempotent"
+    (consult-zoxide-consult-dir-register)
+    (consult-zoxide-consult-dir-register)
+    (expect (length consult-dir-sources) :to-equal 1)))
+
 (describe "consult-zoxide--git-root"
   :var (tmp)
 
