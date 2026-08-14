@@ -1,0 +1,138 @@
+#+TITLE: consult-zoxide
+#+AUTHOR: Ag Ibragimov
+#+DATE: 2026
+
+[[https://github.com/agzam/consult-zoxide.el/actions/workflows/run-tests.yml][https://github.com/agzam/consult-zoxide.el/actions/workflows/run-tests.yml/badge.svg]]
+
+#+begin_quote
+Jump to any directory [[https://github.com/ajeetdsouza/zoxide][zoxide]] remembers, from a Consult prompt - annotated, narrowable, and prunable.
+#+end_quote
+
+* What
+
+[[https://github.com/ajeetdsouza/zoxide][zoxide]] is a smarter ~cd~: it remembers the directories you work in and ranks them by frecency. This surfaces that database in Emacs as a [[https://github.com/minad/consult][Consult]] prompt.
+
+: M-x consult-zoxide
+
+Entries stay in zoxide's frecency order. Each row carries its score and, for git checkouts, the branch that is currently out.
+
+* Why not just a completing-read over ~zoxide query --list~
+
+Because the interesting part is everything around the list.
+
+A database that has been accumulating for a couple of years is mostly rot: deleted worktrees, build directories that no longer exist, ~/tmp~ scratch dirs from six months ago. There was no way to see any of that, let alone remove it. And a flat list of paths tells you nothing about which of five identically-shaped worktree directories you are about to open.
+
+* Annotations
+
+Every row shows its frecency score, right-aligned.
+
+Git checkout roots also show their branch. The branch is read directly out of ~HEAD~ - no git process is spawned - and only for the rows the completion UI actually has on screen, so the cost does not scale with the size of the database. Reading ~HEAD~ costs about a tenth of a millisecond; running ~git symbolic-ref~ costs twelve, which at fifteen visible rows would be a fifth of a second on every keystroke.
+
+The branch is suppressed when it merely repeats the directory name. Under a worktree-per-ticket layout the directory is named after its branch, so echoing it back would put a column of noise on every worktree row.
+
+Directories that no longer exist are struck through.
+
+* Narrowing
+
+| key | keeps                                    |
+|-----+------------------------------------------|
+| ~g~   | git checkout roots                       |
+| ~w~   | worktrees                                |
+| ~d~   | entries whose directory no longer exists |
+
+Worktrees are distinguished from submodules properly: both keep ~.git~ as a file rather than a directory, and only reading it tells them apart. A submodule names its gitdir relatively, so it only resolves against the directory holding it.
+
+* Pruning
+
+Dead entries are left out of the list by default, being nothing but noise while navigating. A prefix argument brings them in:
+
+: C-u M-x consult-zoxide
+
+From there, narrow with ~d~, then ~embark-act-all~ and the removal key. Removal is registered as an Embark multi-target action, so the whole set goes to zoxide in one batched call rather than one process per entry - about thirty times faster for a realistic prune.
+
+** The guard
+
+~consult-zoxide-remove~ refuses any bulk removal that includes a directory which still exists.
+
+This is not paranoia. ~embark-act-all~ with no selection acts on every candidate currently matching, and with ~embark-confirm-act-all~ set to nil a forgotten narrow would empty the entire database on one keystroke. There is no undo: re-adding a path restores neither its score nor its recorded access time.
+
+So one entry at a time is always allowed, dead or alive, and a batch is allowed only when every path in it is already gone. Anything else signals and touches nothing. The check re-stats at removal time rather than trusting the candidate's tag, so it holds however the function was reached.
+
+* Embark
+
+~consult-zoxide-embark~ registers itself as soon as Embark loads. Embark is not a dependency; without it nothing here is affected.
+
+It gives the ~consult-zoxide-dir~ category a keymap inheriting from ~embark-file-map~, so every file action applies, and puts removal on ~\~ - the key Embark already uses for dropping a recentf entry.
+
+~d~ and ~D~ are shadowed to nil. They delete a directory off disk, and that has no business sitting one keystroke away from forgetting its history entry. Dired is where directories get deleted.
+
+* Installation
+
+Requires the ~zoxide~ binary on ~PATH~.
+
+#+begin_src emacs-lisp
+(use-package consult-zoxide
+  :ensure (consult-zoxide :host github :repo "agzam/consult-zoxide.el")
+  :commands (consult-zoxide consult-zoxide-read)
+  :config
+  (consult-zoxide-track-mode 1))
+#+end_src
+
+* Tracking
+
+~consult-zoxide-track-mode~ records directories visited in Dired, so zoxide learns from Emacs and not only from the shell.
+
+Only Dired is hooked. ~consult-zoxide-track~ works in file buffers too, and you can put it on ~find-file-hook~ yourself, but recording the directory of every file you open fills the database faster than it is worth - which is how you end up needing the pruning above.
+
+* API
+
+| function                   | does                                                            |
+|----------------------------+-----------------------------------------------------------------|
+| ~consult-zoxide~             | the command: prompt, then visit                                 |
+| ~consult-zoxide-read~        | prompt and return the directory, for callers that want the path |
+| ~consult-zoxide-directories~ | the bare path list, for feeding another completion source       |
+| ~consult-zoxide-remove~      | drop entries, guarded as above                                  |
+| ~consult-zoxide-track~       | record the current buffer's directory                           |
+| ~consult-zoxide-track-mode~  | do that automatically for Dired                                 |
+
+~consult-zoxide-directories~ takes no required arguments, so it drops straight into a [[https://github.com/karthink/consult-dir][consult-dir]] source:
+
+#+begin_src emacs-lisp
+(defvar consult-dir--source-zoxide
+  `(:name "Zoxide" :narrow ?z :category file :face consult-file
+    :enabled ,(lambda () (executable-find "zoxide"))
+    :items consult-zoxide-directories))
+
+(add-to-list 'consult-dir-sources 'consult-dir--source-zoxide t)
+#+end_src
+
+~consult-zoxide-read~ takes an optional query, which is handed to zoxide's own matcher and skips the prompt entirely when it singles out one directory - the shell ~z~ contract. That makes an Eshell ~z~ a one-liner:
+
+#+begin_src emacs-lisp
+(defun eshell/z (&optional query)
+  (eshell/cd (consult-zoxide-read query)))
+#+end_src
+
+* Customization
+
+| variable                       | default         |
+|--------------------------------+-----------------|
+| ~consult-zoxide-executable~      | ~"zoxide"~        |
+| ~consult-zoxide-annotate-branch~ | ~t~               |
+| ~consult-zoxide-narrow~          | the table above |
+
+Faces: ~consult-zoxide-dead~, ~consult-zoxide-score~, ~consult-zoxide-branch~.
+
+* Development
+
+#+begin_src sh
+make deps        # buttercup, consult, embark
+make test        # unit tests
+make test-embark # Embark integration
+make test-e2e    # against the real zoxide and git binaries
+make test-all
+make check-compile
+make sandbox     # emacs -Q with everything loaded
+#+end_src
+
+The end-to-end suite points ~_ZO_DATA_DIR~ at a throwaway directory per spec, so it never opens your real database, and it skips itself where ~zoxide~ or ~git~ is missing.

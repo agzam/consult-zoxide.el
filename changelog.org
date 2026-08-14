@@ -1,0 +1,15 @@
+#+TITLE: consult-zoxide changelog
+
+* 0.1.0
+
+Initial release.
+
+- ~consult-zoxide~ jumps to a directory from the zoxide database, keeping zoxide's frecency order.
+- ~consult-zoxide-read~ prompts and returns a path, honouring the shell ~z~ contract of skipping the prompt when a query singles out one directory.
+- Annotations: frecency score on every row, plus the branch for git checkout roots, read straight out of ~HEAD~ and only for rows on screen. The branch is suppressed where it merely repeats the directory name.
+- Narrowing on ~g~ git checkout roots, ~w~ worktrees, ~d~ entries whose directory is gone. Worktrees and submodules are told apart by reading the gitdir their ~.git~ file names, resolved against the directory to cope with the relative form submodules use.
+- Dead entries are excluded by default and included under a prefix argument, so they can be narrowed to and pruned.
+- ~consult-zoxide-remove~ drops entries in one batched call and refuses any bulk removal that includes a directory which still exists.
+- ~consult-zoxide-directories~ returns the bare path list, for feeding another completion source such as ~consult-dir~.
+- ~consult-zoxide-track-mode~ teaches zoxide about directories visited in Dired.
+- Optional, self-registering Embark integration in ~consult-zoxide-embark~: the ~consult-zoxide-dir~ category inherits ~embark-file-map~, removal is a multi-target action on ~\~, and the on-disk deletion keys are shadowed.
