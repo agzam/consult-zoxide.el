@@ -6,8 +6,11 @@ SANDBOX_DIR = $(CURDIR)/.sandbox
 # transient history) resolves against whatever real config directory Emacs
 # picks up.  --init-directory plus an explicit eln redirect keeps all of
 # that inside .sandbox/ instead of littering someone's ~/.emacs.d.
+# The redirect is guarded twice over: a build without native-compilation
+# still defines startup-redirect-eln-cache, but leaves the variable it
+# assigns to unbound.
 EMACS_Q = emacs -Q --init-directory "$(SANDBOX_DIR)" \
-	--eval "(startup-redirect-eln-cache \"$(SANDBOX_DIR)/eln-cache/\")" \
+	--eval "(when (and (featurep 'native-compile) (fboundp 'startup-redirect-eln-cache)) (startup-redirect-eln-cache \"$(SANDBOX_DIR)/eln-cache/\"))" \
 	--eval "(setq package-user-dir \"$(ELPA_DIR)\")" \
 	--eval "(require 'package)"
 
