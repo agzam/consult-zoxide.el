@@ -302,7 +302,8 @@ recorded access time."
                      (and buffer-file-name
                           (file-name-directory buffer-file-name))))
               ((not (file-remote-p dir)))
-              ((file-readable-p dir)))
+              ((file-readable-p dir))
+              ((executable-find consult-zoxide-executable)))
     (with-temp-buffer
       (consult-zoxide--call t "add" (expand-file-name dir)))))
 

@@ -458,9 +458,17 @@
   (before-each
     (setq consult-zoxide-tests--tmp (make-temp-file "czox-track" t))
     (setq tmp consult-zoxide-tests--tmp)
+    (spy-on 'executable-find :and-return-value "/usr/bin/zoxide")
     (spy-on 'consult-zoxide--call :and-return-value 0))
 
   (after-each (delete-directory tmp t))
+
+  (it "stays silent where zoxide is not installed, as a readin hook must"
+    (spy-on 'executable-find :and-return-value nil)
+    (with-temp-buffer
+      (dired-mode tmp)
+      (expect (consult-zoxide-track) :not :to-throw))
+    (expect 'consult-zoxide--call :not :to-have-been-called))
 
   (it "records the directory of a file buffer"
     (with-temp-buffer
@@ -506,6 +514,19 @@
   (it "unhooks dired off"
     (consult-zoxide-track-mode 1)
     (consult-zoxide-track-mode -1)
-    (expect (memq #'consult-zoxide-track dired-after-readin-hook) :to-be nil)))
+    (expect (memq #'consult-zoxide-track dired-after-readin-hook) :to-be nil))
+
+  (it "leaves dired readable where zoxide is not installed"
+    (let* ((consult-zoxide-executable "zoxide-not-installed-anywhere")
+           (dir (make-temp-file "czox-track-mode" t))
+           buf)
+      (unwind-protect
+          (progn
+            (consult-zoxide-track-mode 1)
+            (setq buf (dired-noselect dir))
+            (expect (buffer-live-p buf) :to-be-truthy)
+            (expect (buffer-local-value 'major-mode buf) :to-be 'dired-mode))
+        (when buf (kill-buffer buf))
+        (delete-directory dir t)))))
 
 ;;; consult-zoxide-tests.el ends here
