@@ -13,4 +13,5 @@ Initial release.
 - ~consult-zoxide-directories~ returns the bare path list, for feeding another completion source.
 - A self-registering ~consult-dir~ source, appended to ~consult-dir-sources~ under the ~z~ narrowing key once ~consult-dir~ loads, with no hard dependency on it.
 - ~consult-zoxide-track-mode~ teaches zoxide about directories visited in Dired, and stays out of Dired's way where zoxide is not installed.
-- Optional, self-registering Embark integration in ~consult-zoxide-embark~: the ~consult-zoxide-dir~ category inherits ~embark-file-map~, removal is a multi-target action on ~\~, and the on-disk deletion keys are shadowed.
+- Optional, self-registering Embark integration in ~consult-zoxide-embark~: the ~consult-zoxide-dir~ category inherits ~embark-file-map~, removal is a multi-target action on ~\~, and ~d~ joins ~D~ at ~delete-directory~ behind Embark's own confirmation. ~embark-quit-after-action~ stays the user's to set; the prompt that survives a removal comes back without the removed rows, which takes working around ~embark--restart~ seeing no minibuffer when a multi-target action's post hooks run.
+- Removing one entry names its full path; the count wording is reserved for a batch.

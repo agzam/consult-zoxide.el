@@ -287,8 +287,9 @@ recorded access time."
       ;; non-zero exit means the database was left untouched
       (unless (zerop (apply #'consult-zoxide--call t "remove" paths))
         (error "Zoxide remove failed: %s" (string-trim (buffer-string)))))
-    (message "Removed %d zoxide %s" (length paths)
-             (if (length= paths 1) "entry" "entries"))))
+    (if (length= paths 1)
+        (message "Removed zoxide entry %s" (car paths))
+      (message "Removed %d zoxide entries" (length paths)))))
 
 
 ;;;; Tracking

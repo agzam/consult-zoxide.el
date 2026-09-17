@@ -64,7 +64,11 @@ So one entry at a time is always allowed, dead or alive, and a batch is allowed 
 
 It gives the ~consult-zoxide-dir~ category a keymap inheriting from ~embark-file-map~, so every file action applies, and puts removal on ~\~ - the key Embark already uses for dropping a recentf entry.
 
-~d~ and ~D~ are shadowed to nil. They delete a directory off disk, and that has no business sitting one keystroke away from forgetting its history entry. Dired is where directories get deleted.
+~d~ is rebound to ~delete-directory~, the inherited ~delete-file~ having nothing to act on where every candidate is a directory. Both it and ~D~ delete off disk, behind the confirmation prompt Embark's own ~embark-pre-action-hooks~ already puts in front of them.
+
+~embark-quit-after-action~ is left alone. Whether the prompt survives a removal is your setting to make, and either answer works: the prompt either closes or comes back without the rows just removed.
+
+The refresh takes a detour worth knowing about. Embark restarts a prompt with ~embark--restart~ on ~embark-post-action-hooks~, and that function returns early unless a minibuffer is current. For a multi-target action ~embark--act~ runs those hooks inside ~with-selected-window~ on the *target* window, so the test fails and the refresh silently never happens. Every action Embark itself restarts is single-target, which is why the combination goes unnoticed. ~consult-zoxide-embark--restart~ makes the minibuffer current first.
 
 * consult-dir
 

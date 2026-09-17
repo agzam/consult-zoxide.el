@@ -407,6 +407,18 @@
     (expect (spy-calls-args-for 'consult-zoxide--call 0)
             :to-equal (list t "remove" live)))
 
+  (it "names the entry it removed, rather than counting to one"
+    (expect (consult-zoxide-remove "/gone/away")
+            :to-equal "Removed zoxide entry /gone/away"))
+
+  (it "names the full path even where a prompt showed it abbreviated"
+    (expect (consult-zoxide-remove live) :to-equal
+            (format "Removed zoxide entry %s" live)))
+
+  (it "counts instead of listing once there is more than one"
+    (expect (consult-zoxide-remove '("/gone/a" "/gone/b"))
+            :to-equal "Removed 2 zoxide entries"))
+
   (it "batches several vanished entries into one call"
     ;; one process for the lot; zoxide takes many paths per invocation
     (consult-zoxide-remove '("/gone/a" "/gone/b" "/gone/c"))

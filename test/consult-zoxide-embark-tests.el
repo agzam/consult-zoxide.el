@@ -47,13 +47,22 @@
     (expect (keymap-lookup consult-zoxide-embark-map "\\")
             :to-be #'consult-zoxide-remove))
 
-  (it "shadows the parent's on-disk deletion keys"
-    ;; delete-file/delete-directory have no business one key from "forget"
+  (it "sends both deletion keys at the directory, not at a file"
+    ;; every candidate is a directory, so the inherited delete-file on `d'
+    ;; could only ever error
     (consult-zoxide-embark-register)
     (expect (keymap-lookup embark-file-map "d") :to-be #'delete-file)
-    (expect (keymap-lookup embark-file-map "D") :to-be #'delete-directory)
-    (expect (keymap-lookup consult-zoxide-embark-map "d") :to-be nil)
-    (expect (keymap-lookup consult-zoxide-embark-map "D") :to-be nil))
+    (expect (keymap-lookup consult-zoxide-embark-map "d")
+            :to-be #'delete-directory)
+    (expect (keymap-lookup consult-zoxide-embark-map "D")
+            :to-be #'delete-directory))
+
+  (it "leaves the confirmation in front of them to Embark"
+    ;; no prompt of our own: embark-pre-action-hooks already has one
+    (expect (alist-get 'delete-directory embark-pre-action-hooks)
+            :to-contain #'embark--confirm)
+    (expect (alist-get 'delete-file embark-pre-action-hooks)
+            :to-contain #'embark--confirm))
 
   (it "registers removal as a multi-target action"
     ;; so act-all hands zoxide one batched call instead of a process each
@@ -65,26 +74,17 @@
   (it "asks for a session restart after removal"
     (setq embark-post-action-hooks nil)
     (consult-zoxide-embark-register)
+    ;; not embark--restart itself: that one no-ops for a multi-target action
     (expect (alist-get 'consult-zoxide-remove embark-post-action-hooks)
-            :to-equal '(embark--restart)))
+            :to-equal '(consult-zoxide-embark--restart)))
 
-  (it "keeps the session alive across a removal"
-    (setq embark-quit-after-action t)
-    (consult-zoxide-embark-register)
-    (expect (alist-get 'consult-zoxide-remove embark-quit-after-action)
-            :to-be nil)
-    (expect (alist-get t embark-quit-after-action) :to-be t))
-
-  (it "preserves a nil global default when widening it into an alist"
-    (setq embark-quit-after-action nil)
-    (consult-zoxide-embark-register)
-    (expect (alist-get t embark-quit-after-action) :to-be nil))
-
-  (it "leaves an existing quit alist untouched apart from its own entry"
-    (setq embark-quit-after-action '((some-other-action . t) (t . nil)))
-    (consult-zoxide-embark-register)
-    (expect (alist-get 'some-other-action embark-quit-after-action) :to-be t)
-    (expect (alist-get t embark-quit-after-action) :to-be nil))
+  (it "leaves embark-quit-after-action to the user"
+    ;; whether the prompt survives a removal is not ours to decide, and
+    ;; touching it lost to whichever config setopt ran last anyway
+    (dolist (setting (list t nil '((some-other-action . t) (t . nil))))
+      (setq embark-quit-after-action setting)
+      (consult-zoxide-embark-register)
+      (expect embark-quit-after-action :to-equal setting)))
 
   (it "is idempotent"
     (setq embark-keymap-alist nil
@@ -97,6 +97,25 @@
     (expect (seq-count (lambda (action) (eq action #'consult-zoxide-remove))
                        embark-multitarget-actions)
             :to-equal 1)))
+
+(describe "consult-zoxide-embark--restart"
+  (it "reaches the minibuffer from whatever buffer the hook runs in"
+    ;; the whole point: embark--act runs a multi-target action's post hooks
+    ;; selected on the target window, where a bare embark--restart no-ops
+    (let (minibuffer-seen)
+      (spy-on 'active-minibuffer-window :and-return-value (minibuffer-window))
+      (spy-on 'embark--restart :and-call-fake
+              (lambda (&rest _) (setq minibuffer-seen (minibufferp))))
+      (with-temp-buffer
+        (expect (minibufferp) :to-be nil)
+        (consult-zoxide-embark--restart))
+      (expect minibuffer-seen :to-be t)))
+
+  (it "does nothing when no prompt is open"
+    (spy-on 'active-minibuffer-window :and-return-value nil)
+    (spy-on 'embark--restart)
+    (consult-zoxide-embark--restart)
+    (expect 'embark--restart :not :to-have-been-called)))
 
 (describe "the Embark autoload hook"
   (it "has already registered, Embark being loaded"
