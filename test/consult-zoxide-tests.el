@@ -97,6 +97,12 @@
     (expect (consult-zoxide-directories)
             :to-equal '("/home/u/one" "/home/u/two")))
 
+  (it "leaves the paths unpropertized"
+    ;; `equal' ignores text properties on strings, so the spec above would
+    ;; pass just the same for a candidate carrying the category tag
+    ;; `consult-zoxide--source-items' adds
+    (expect (text-properties-at 0 (car (consult-zoxide-directories))) :to-be nil))
+
   (it "takes no arguments, as an items function is called"
     (expect (funcall #'consult-zoxide-directories) :to-have-same-items-as
             '("/home/u/one" "/home/u/two")))
@@ -117,9 +123,12 @@
   (it "describes itself as a file source under the z key"
     (expect (plist-get consult-zoxide-directory-source :name) :to-equal "Zoxide")
     (expect (plist-get consult-zoxide-directory-source :narrow) :to-equal ?z)
+    ;; `consult-dir--pick' turns the match back into a directory with a
+    ;; pcase over this, and it knows `file' and `bookmark' only; any other
+    ;; category returns nil and consult-dir opens nothing
     (expect (plist-get consult-zoxide-directory-source :category) :to-be 'file)
     (expect (plist-get consult-zoxide-directory-source :items)
-            :to-be #'consult-zoxide-directories))
+            :to-be #'consult-zoxide--source-items))
 
   (it "disables itself where zoxide is not installed"
     (spy-on 'executable-find :and-return-value nil)
@@ -138,6 +147,33 @@
     (consult-zoxide-consult-dir-register)
     (consult-zoxide-consult-dir-register)
     (expect (length consult-dir-sources) :to-equal 1)))
+
+(describe "consult-zoxide--source-items"
+  (before-each
+    (spy-on 'consult-zoxide--call
+            :and-call-fake
+            (consult-zoxide-tests--stub-output
+             " 9.0 /home/u/one\n 1.0 /home/u/two\n")))
+
+  (it "tags every candidate with the zoxide category"
+    ;; the source's own :category cannot be it, so the candidate carries it
+    (expect (mapcar (lambda (item) (get-text-property 0 'multi-category item))
+                    (consult-zoxide--source-items))
+            :to-equal '((consult-zoxide-dir . "/home/u/one")
+                        (consult-zoxide-dir . "/home/u/two"))))
+
+  (it "keeps the tagged path itself bare"
+    ;; consult hands back the datum's cdr on selection, not the candidate,
+    ;; so that path is what consult-dir ends up opening
+    (expect (text-properties-at
+             0 (cdr (get-text-property 0 'multi-category
+                                       (car (consult-zoxide--source-items)))))
+            :to-be nil))
+
+  (it "tags the path it was built from"
+    (dolist (item (consult-zoxide--source-items))
+      (expect (cdr (get-text-property 0 'multi-category item))
+              :to-equal (substring-no-properties item)))))
 
 (describe "consult-zoxide--git-root"
   :var (tmp)

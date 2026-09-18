@@ -76,6 +76,10 @@ If [[https://github.com/karthink/consult-dir][consult-dir]] is around, a "Zoxide
 
 The source is ~consult-zoxide-directory-source~, should you want to reorder or replace it.
 
+Its rows carry the Embark actions above, so ~\~ forgets an entry from the ~consult-dir~ prompt as well - the same key as in ~consult-zoxide~ itself.
+
+That takes a small trick, worth knowing if you write your own source. ~consult--multi~ stamps each candidate with a ~multi-category~ datum built from its source's ~:category~, and Embark reads that datum to choose a keymap. Declaring ~:category consult-zoxide-dir~ would therefore be the obvious thing, and it breaks consult-dir: ~consult-dir--pick~ turns the match back into a directory with a ~pcase~ over the source's category that handles ~file~ and ~bookmark~ only, so anything else opens nothing. But consult leaves a datum a candidate already carries alone, so the source declares ~:category file~ for consult-dir while its items carry ~(consult-zoxide-dir . PATH)~ for Embark, and both get the answer they need.
+
 * Installation
 
 Requires the ~zoxide~ binary on ~PATH~.

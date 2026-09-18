@@ -124,6 +124,30 @@
     (expect (alist-get 'consult-zoxide-dir embark-keymap-alist)
             :to-be 'consult-zoxide-embark-map)))
 
+(describe "a zoxide row in a consult-dir prompt"
+  (before-each
+    (spy-on 'consult-zoxide--call
+            :and-call-fake
+            (lambda (destination &rest _)
+              (when (eq destination t) (insert " 9.0 /home/u/one\n"))
+              0)))
+
+  (it "reaches the zoxide keymap, not the plain file one"
+    ;; the source has to report itself as `file' to consult-dir, so without
+    ;; the candidate's own datum embark refines the target to a file and the
+    ;; removal key is embark-recentf-remove instead
+    (let* ((candidate (concat (car (consult-zoxide--source-items))
+                              ;; consult marks which source a candidate came
+                              ;; from with an invisible character appended to
+                              ;; it, which is why the refinement below has to
+                              ;; hand back the datum and not the target string
+                              (string #x200000)))
+           (target (embark--refine-multi-category 'multi-category candidate))
+           (keymap (symbol-value (alist-get (car target) embark-keymap-alist))))
+      (expect target :to-equal '(consult-zoxide-dir . "/home/u/one"))
+      (expect keymap :to-be consult-zoxide-embark-map)
+      (expect (keymap-lookup keymap "\\") :to-be #'consult-zoxide-remove))))
+
 (describe "embark-act-all against the removal guard"
   :var (tmp live)
 

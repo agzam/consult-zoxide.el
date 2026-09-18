@@ -324,13 +324,26 @@ you open, which fills the database faster than it is worth."
 
 (defvar consult-dir-sources)
 
+(defun consult-zoxide--source-items ()
+  "Return the zoxide directories, each tagged `consult-zoxide-dir'.
+The tag is a `multi-category' datum, which is what Embark reads to pick
+a keymap, so a zoxide row in a `consult-dir' prompt gets the zoxide
+actions rather than the plain file ones.  `consult--multi' keeps a datum
+a candidate already carries, so it does not overwrite this with the
+source's own `:category' - and that category has to stay `file',
+`consult-dir--pick' knowing only `file' and `bookmark' when it turns the
+match back into a directory."
+  (mapcar (lambda (path)
+            (propertize path 'multi-category (cons 'consult-zoxide-dir path)))
+          (consult-zoxide-directories)))
+
 (defvar consult-zoxide-directory-source
   `( :name     "Zoxide"
      :narrow   ?z
      :category file
      :face     consult-file
      :enabled  ,(lambda () (executable-find consult-zoxide-executable))
-     :items    consult-zoxide-directories)
+     :items    consult-zoxide--source-items)
   "Zoxide source for `consult-dir-sources'.
 Appended as soon as `consult-dir' loads, so it needs no setting up.")
 
