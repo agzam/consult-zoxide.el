@@ -22,6 +22,14 @@ Because the interesting part is everything around the list.
 
 A database that has been accumulating for a couple of years is mostly rot: deleted worktrees, build directories that no longer exist, ~/tmp~ scratch dirs from six months ago. There was no way to see any of that, let alone remove it. And a flat list of paths tells you nothing about which of five identically-shaped worktree directories you are about to open.
 
+* Prior art
+
+[[https://git.sr.ht/~vonfry/zoxide.el][zoxide.el]] by Ruoyu Feng is the other Emacs package for zoxide, and it came first. It wraps the binary in a ~completing-read~ with no dependencies at all: ~zoxide-find-file~, ~zoxide-cd~, ~zoxide-travel~, plus ~zoxide-add~ and ~zoxide-remove~ taking one path each. Prefer it if you want the plain thing, or if you do not use Consult.
+
+This package goes the other way and builds on Consult: annotations on every row, narrowing, dead-entry pruning in one batched call, an Embark keymap and a ~consult-dir~ source. Everything in the sections below is the difference between the two.
+
+[[https://github.com/karthink/consult-dir][consult-dir]] solves an adjacent problem - switching the directory a prompt runs in - and reads recentf, project and bookmark directories rather than zoxide. The two compose - see the consult-dir section below.
+
 * Annotations
 
 Every row shows its frecency score, right-aligned.
@@ -64,7 +72,14 @@ The check re-stats at removal time rather than trusting the candidate's ~dead~ t
 
 * Embark
 
-~consult-zoxide-embark~ registers itself as soon as Embark loads. Embark is not a dependency; without it nothing here is affected.
+Opt in with one line:
+
+#+begin_src emacs-lisp
+(with-eval-after-load 'embark
+  (consult-zoxide-embark-register))
+#+end_src
+
+~consult-zoxide-embark-register~ is autoloaded, so that needs no ~require~. Nothing registers on its own: installing the package leaves Embark exactly as it was. Embark is not a dependency either, so without it nothing here is affected.
 
 It gives the ~consult-zoxide-dir~ category a keymap inheriting from ~embark-file-map~, so every file action applies, and puts removal on ~\~ - the key Embark already uses for dropping a recentf entry.
 
@@ -76,7 +91,14 @@ The refresh takes a detour worth knowing about. Embark restarts a prompt with ~e
 
 * consult-dir
 
-If [[https://github.com/karthink/consult-dir][consult-dir]] is around, a "Zoxide" source is appended to ~consult-dir-sources~ as soon as it loads, reachable under the ~z~ narrowing key. Like the Embark integration this registers itself and consult-dir is not a dependency, so there is nothing to set up and nothing to break if you do not use it.
+Same arrangement for [[https://github.com/karthink/consult-dir][consult-dir]]:
+
+#+begin_src emacs-lisp
+(with-eval-after-load 'consult-dir
+  (consult-zoxide-consult-dir-register))
+#+end_src
+
+That appends a "Zoxide" source to ~consult-dir-sources~, reachable under the ~z~ narrowing key. consult-dir is not a dependency.
 
 The source is ~consult-zoxide-directory-source~, should you want to reorder or replace it.
 
@@ -94,6 +116,13 @@ Requires the ~zoxide~ binary on ~PATH~.
   :commands (consult-zoxide consult-zoxide-read)
   :config
   (consult-zoxide-track-mode 1))
+
+;; optional, see below
+(with-eval-after-load 'embark
+  (consult-zoxide-embark-register))
+
+(with-eval-after-load 'consult-dir
+  (consult-zoxide-consult-dir-register))
 #+end_src
 
 * Tracking
@@ -141,6 +170,9 @@ make test-embark # Embark integration
 make test-e2e    # against the real zoxide and git binaries
 make test-all
 make check-compile
+make lint        # package-lint
+make checkdoc
+make melpazoid   # the checks a MELPA reviewer runs
 make sandbox     # emacs -Q with everything loaded
 #+end_src
 

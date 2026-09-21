@@ -1,5 +1,6 @@
 ELPA_DIR = $(CURDIR)/.elpa
 SANDBOX_DIR = $(CURDIR)/.sandbox
+MELPAZOID ?= $(HOME)/GitHub/riscy/melpazoid/melpazoid/melpazoid.el
 
 # -Q and --batch do not relocate user-emacs-directory, and -Q skips
 # early-init with it, so every unset default (eln cache, auto-save-list,
@@ -21,13 +22,15 @@ EMACS_BATCH = $(EMACS_Q) --batch \
 EMACS_SANDBOX = $(EMACS_Q) \
 	--eval "(package-initialize)"
 
-.PHONY: help test test-embark test-e2e test-all deps lint check-autoloads check-compile compile clean sandbox
+.PHONY: help test test-embark test-e2e test-all deps lint checkdoc melpazoid check-autoloads check-compile compile clean sandbox
 
 help:
 	@echo "Available commands:"
 	@echo "  make deps              Install dependencies"
 	@echo "  make sandbox           Launch emacs -Q with consult-zoxide + embark loaded"
 	@echo "  make lint              Run package-lint"
+	@echo "  make checkdoc          Run checkdoc"
+	@echo "  make melpazoid         Run melpazoid, the checks a MELPA reviewer runs"
 	@echo "  make test              Run unit tests"
 	@echo "  make test-embark       Run Embark integration tests"
 	@echo "  make test-e2e          Run end-to-end tests against a real zoxide binary"
@@ -47,7 +50,8 @@ $(ELPA_DIR): $(SANDBOX_DIR)
 	--eval "(package-install 'buttercup)" \
 	--eval "(package-install 'consult)" \
 	--eval "(package-install 'embark)" \
-	--eval "(package-install 'package-lint)"
+	--eval "(package-install 'package-lint)" \
+	--eval "(package-install 'pkg-info)"
 
 deps: $(ELPA_DIR)
 
@@ -82,18 +86,38 @@ test-all: test test-embark test-e2e
 lint: $(ELPA_DIR)
 	@echo "Linting..."
 	@# package-lint is what actually guards the declared Emacs minimum: it
-	@# flags anything newer than the version in Package-Requires.  The one
-	@# warning filtered away is `with-eval-after-load' in the Embark file,
-	@# which package-lint calls configuration-only - but that is exactly how
-	@# an autoload cookie registers optional integration without turning
-	@# Embark into a hard dependency.
-	@out=$$($(EMACS_BATCH) \
+	@# flags anything newer than the version in Package-Requires.  Nothing
+	@# is filtered out of its output - MELPA's own CI does not filter
+	@# either, so a locally hidden warning only surfaces during review.
+	$(EMACS_BATCH) \
 	--eval "(add-to-list 'load-path \".\")" \
 	--eval "(require 'package-lint)" \
 	--eval "(setq package-lint-main-file \"consult-zoxide.el\")" \
-	-f package-lint-batch-and-exit consult-zoxide.el consult-zoxide-embark.el 2>&1 \
-	| grep -v "with-eval-after-load" | grep ":[0-9]*:[0-9]*:" || true); \
-	if [ -n "$$out" ]; then echo "$$out"; exit 1; else echo "lint: clean"; fi
+	-f package-lint-batch-and-exit consult-zoxide.el consult-zoxide-embark.el
+
+checkdoc:
+	@echo "Checking documentation strings..."
+	@out=$$($(EMACS_Q) --batch \
+	--eval "(require 'checkdoc)" \
+	--eval "(dolist (f '(\"consult-zoxide.el\" \"consult-zoxide-embark.el\")) (checkdoc-file f))" 2>&1); \
+	if [ -n "$$out" ]; then echo "$$out"; exit 1; else echo "checkdoc: clean"; fi
+
+melpazoid: $(ELPA_DIR)
+	@echo "Running melpazoid..."
+	@test -f "$(MELPAZOID)" || { \
+	echo "no melpazoid at $(MELPAZOID)"; \
+	echo "clone https://github.com/riscy/melpazoid, or set MELPAZOID=/path/to/melpazoid.el"; \
+	exit 1; }
+	@# melpazoid resolves dependencies against (locate-user-emacs-file "elpa"),
+	@# which --init-directory points into the sandbox
+	@ln -sfn "$(ELPA_DIR)" "$(SANDBOX_DIR)/elpa"
+	@# it checks every .el file beside the one it is pointed at, so give it
+	@# only the two that ship - not the test suite, not this checkout
+	@stage=$$(mktemp -d) && cp consult-zoxide.el consult-zoxide-embark.el $$stage/ && \
+	out=$$(cd $$stage && PACKAGE_MAIN=consult-zoxide.el $(EMACS_BATCH) \
+	--load="$(MELPAZOID)" 2>&1); \
+	rm -rf $$stage; \
+	if [ -n "$$out" ]; then echo "$$out"; exit 1; else echo "melpazoid: clean"; fi
 
 check-autoloads:
 	@echo "Generating and loading autoloads..."

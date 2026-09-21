@@ -3,6 +3,7 @@
 ;; Copyright (C) 2026 Ag Ibragimov
 ;;
 ;; Author: Ag Ibragimov <agzam.ibragimov@gmail.com>
+;; Assisted-by: Claude:claude-opus-4-5
 ;; Maintainer: Ag Ibragimov <agzam.ibragimov@gmail.com>
 ;; Created: August 13, 2026
 ;; Version: 0.1.0
@@ -20,19 +21,30 @@
 ;;
 ;;   M-x consult-zoxide
 ;;
-;; Entries keep zoxide's frecency order and are annotated with their score
+;; Entries keep zoxide's own ranking and are annotated with their score
 ;; and, for git checkouts, the branch that is currently out.  Narrowing
-;; keys select subsets: `g' git checkout roots, `w' worktrees, `d' entries
+;; keys select subsets: g git checkout roots, w worktrees, d entries
 ;; whose directory no longer exists.
 ;;
 ;; A prefix argument lists the vanished entries too, which is how they get
-;; pruned: narrow with `d', then `embark-act-all' the removal action.  That
+;; pruned: narrow with d, then `embark-act-all' the removal action.  That
 ;; batch goes through unquestioned, every directory in it being gone
 ;; already; a batch holding directories that still exist is confirmed
 ;; first, so a mis-narrowed `embark-act-all' cannot empty the database.
 ;;
-;; Embark integration lives in the optional `consult-zoxide-embark'
-;; file, which registers itself as soon as Embark loads.
+;; Two integrations are opt-in, so that installing this package changes
+;; nothing about Embark or consult-dir until you ask it to:
+;;
+;;   (with-eval-after-load 'embark
+;;     (consult-zoxide-embark-register))
+;;
+;;   (with-eval-after-load 'consult-dir
+;;     (consult-zoxide-consult-dir-register))
+;;
+;; The first gives zoxide rows their own Embark keymap, the removal
+;; action above among them, and lives in the `consult-zoxide-embark'
+;; file.  The second adds a Zoxide source to `consult-dir'.  Neither
+;; Embark nor consult-dir is a dependency.
 ;;
 ;; `consult-zoxide-read' is the library entry point: it prompts and
 ;; returns a directory without visiting it, for callers such as an
@@ -52,22 +64,19 @@
   :prefix "consult-zoxide-")
 
 (defcustom consult-zoxide-executable "zoxide"
-  "Name of, or path to, the zoxide executable."
+  "Name or path of the zoxide executable."
   :type 'string)
 
 (defcustom consult-zoxide-annotate-branch t
-  "Whether to annotate git checkout roots with the branch they have out.
-The branch is read straight out of HEAD rather than by running git, and
-only for the rows the completion UI has on screen, so the cost does not
-scale with the size of the database."
+  "Whether to show the checked-out branch beside git checkout roots."
   :type 'boolean)
 
 (defcustom consult-zoxide-narrow
   '((?g git       "git repo")
     (?w worktree  "worktree")
     (?d dead      "dead"))
-  "Narrowing configuration, as a list of (KEY TAG LABEL).
-TAG is matched against the tags `consult-zoxide--candidates' attaches."
+  "Narrowing keys, as a list of (KEY TAG LABEL).
+TAG is `git', `worktree' or `dead'."
   :type '(repeat (list character symbol string)))
 
 (defface consult-zoxide-dead
@@ -76,31 +85,27 @@ TAG is matched against the tags `consult-zoxide--candidates' attaches."
 
 (defface consult-zoxide-score
   '((t :inherit completions-annotations))
-  "Face for the frecency score annotation.")
+  "Face for the score annotation.")
 
 (defface consult-zoxide-branch
   '((t :inherit font-lock-keyword-face))
   "Face for the git branch annotation.")
 
 (defvar consult-zoxide--branch-cache nil
-  "Branch memo for a single prompt, let-bound by `consult-zoxide-read'.
-A prompt is too short-lived for a checkout to change under it, so going
-out of scope is all the invalidation this needs.")
+  "Branch cache for one prompt, let-bound by `consult-zoxide-read'.")
 
 
 ;;;; Talking to zoxide
 
 (defun consult-zoxide--call (destination &rest args)
-  "Run the zoxide executable with ARGS, sending output to DESTINATION.
-Returns the exit status."
+  "Send zoxide's output to DESTINATION, run it with ARGS, return its status."
   (unless (executable-find consult-zoxide-executable)
     (error "Cannot find the `%s' executable" consult-zoxide-executable))
   (apply #'call-process consult-zoxide-executable nil destination nil args))
 
 (defun consult-zoxide--query (&optional query include-dead)
-  "Return an alist of (PATH . SCORE), most frecent first.
-QUERY is passed to zoxide's own matcher.  INCLUDE-DEAD keeps entries
-whose directory has since vanished, which zoxide otherwise filters out."
+  "Return an alist of (PATH . SCORE) for QUERY, highest score first.
+INCLUDE-DEAD keeps entries whose directory is gone."
   (with-temp-buffer
     (let ((status (apply #'consult-zoxide--call t "query" "--list" "--score"
                          (append (and include-dead '("--all"))
@@ -120,17 +125,15 @@ whose directory has since vanished, which zoxide otherwise filters out."
 
 ;;;###autoload
 (defun consult-zoxide-directories (&optional query include-dead)
-  "Return the directories zoxide remembers, most frecent first.
-Handy for feeding another completion source, such as `consult-dir'.
-QUERY and INCLUDE-DEAD are as in `consult-zoxide-read'."
+  "Return the directories zoxide remembers for QUERY, highest score first.
+INCLUDE-DEAD keeps entries whose directory is gone."
   (mapcar #'car (consult-zoxide--query query include-dead)))
 
 
 ;;;; Git
 
 (defun consult-zoxide--gitdir-link (file dir)
-  "Return the gitdir named inside FILE, resolved against DIR.
-Submodules name it relatively, so it only resolves against DIR."
+  "Return the gitdir named inside FILE, resolved against DIR."
   (with-temp-buffer
     (insert-file-contents-literally file nil 0 512)
     (goto-char (point-min))
@@ -139,8 +142,7 @@ Submodules name it relatively, so it only resolves against DIR."
 
 (defun consult-zoxide--git-root (dir)
   "Return (KIND . GITDIR) when DIR is the root of a git checkout.
-KIND is `plain', `worktree' or `submodule'.  The latter two keep `.git'
-as a file naming the real gitdir instead of as a directory."
+KIND is `plain', `worktree' or `submodule'."
   (let ((dot-git (expand-file-name ".git" dir)))
     (cond
      ((file-directory-p dot-git) (cons 'plain dot-git))
@@ -166,7 +168,7 @@ as a file naming the real gitdir instead of as a directory."
           (concat "@" (match-string-no-properties 1))))))))
 
 (defun consult-zoxide--branch-for (candidate gitdir)
-  "Return GITDIR's branch, memoized per prompt under CANDIDATE."
+  "Return CANDIDATE's branch, read from GITDIR and cached for the prompt."
   (if consult-zoxide--branch-cache
       (with-memoization (gethash candidate consult-zoxide--branch-cache)
         (consult-zoxide--branch gitdir))
@@ -176,9 +178,8 @@ as a file naming the real gitdir instead of as a directory."
 ;;;; Candidates
 
 (defun consult-zoxide--candidates (&optional query include-dead)
-  "Return propertized candidates for QUERY, INCLUDE-DEAD keeping gone dirs.
-Each candidate carries its score, its narrowing tags and, for checkout
-roots, the gitdir the branch annotation reads from."
+  "Return propertized candidates for QUERY.
+INCLUDE-DEAD keeps entries whose directory is gone."
   (mapcar
    (pcase-lambda (`(,path . ,score))
      ;; a remote path is left unexamined: stat-ing it would put network
@@ -200,7 +201,7 @@ roots, the gitdir the branch annotation reads from."
    (consult-zoxide--query query include-dead)))
 
 (defun consult-zoxide--annotation (candidate)
-  "Return the annotation text for CANDIDATE, without alignment padding."
+  "Return CANDIDATE's annotation text, without alignment padding."
   (when-let* ((score (get-text-property 0 'consult-zoxide-score candidate)))
     (let* ((gitdir (and consult-zoxide-annotate-branch
                         (get-text-property 0 'consult-zoxide-gitdir candidate)))
@@ -232,11 +233,8 @@ roots, the gitdir the branch annotation reads from."
 ;;;###autoload
 (defun consult-zoxide-read (&optional query include-dead)
   "Prompt for a directory zoxide remembers and return it.
-QUERY is handed to zoxide's own matcher and, when it singles out exactly
-one directory, the prompt is skipped - the shell `z' contract.
-INCLUDE-DEAD lists entries whose directory has vanished; they are left
-out by default, being nothing but noise unless the point is to prune
-them."
+QUERY goes to zoxide's matcher; a single match skips the prompt.
+INCLUDE-DEAD also lists entries whose directory is gone."
   (let* ((consult-zoxide--branch-cache (make-hash-table :test #'equal))
          (candidates (consult-zoxide--candidates query include-dead)))
     (unless candidates
@@ -260,26 +258,23 @@ them."
 (defun consult-zoxide (&optional include-dead)
   "Jump to a directory zoxide remembers.
 With a prefix argument, INCLUDE-DEAD also lists entries whose directory
-is gone, so that narrowing to `d' collects them for removal."
+is gone."
   (interactive "P")
   (find-file (consult-zoxide-read nil include-dead)))
 
 ;;;###autoload
 (defun consult-zoxide-remove (paths)
   "Drop PATHS from the zoxide database.
-
-Asks before a bulk removal that includes a directory which still exists.
-Bulk removal is mostly for pruning entries whose directory is gone; a
-mis-narrowed `embark-act-all' would otherwise empty the database in one
-keystroke, and re-adding a path restores neither its score nor its
-recorded access time.  The question names the count, which is what a
-mis-narrow gives away."
+Ask first when a bulk removal includes a directory that still exists."
   (let* ((paths (mapcar #'substring-no-properties (ensure-list paths)))
          (live (seq-filter (lambda (path)
                              (or (file-remote-p path) (file-directory-p path)))
                            paths)))
     (unless paths
       (user-error "No paths to remove"))
+    ;; removal is irreversible - re-adding a path restores neither its score
+    ;; nor its access time - and a mis-narrowed `embark-act-all' reaches the
+    ;; whole database, so the count is the only warning there is
     (when (and (< 1 (length paths)) live)
       (unless (y-or-n-p (format "Remove %d zoxide entries, %d of them live? "
                                 (length paths) (length live)))
@@ -298,7 +293,7 @@ mis-narrow gives away."
 
 ;;;###autoload
 (defun consult-zoxide-track ()
-  "Teach zoxide about the current buffer's directory."
+  "Add the current buffer's directory to the zoxide database."
   (interactive)
   (when-let* ((dir (if (derived-mode-p 'dired-mode)
                        (and (stringp dired-directory) dired-directory)
@@ -312,10 +307,7 @@ mis-narrow gives away."
 
 ;;;###autoload
 (define-minor-mode consult-zoxide-track-mode
-  "Record directories visited in Dired into the zoxide database.
-Only Dired is hooked.  `consult-zoxide-track' works in file buffers too,
-but putting it on `find-file-hook' records the directory of every file
-you open, which fills the database faster than it is worth."
+  "Record directories visited in Dired into the zoxide database."
   :global t
   :group 'consult-zoxide
   (if consult-zoxide-track-mode
@@ -327,14 +319,11 @@ you open, which fills the database faster than it is worth."
 (defvar consult-dir-sources)
 
 (defun consult-zoxide--source-items ()
-  "Return the zoxide directories, each tagged `consult-zoxide-dir'.
-The tag is a `multi-category' datum, which is what Embark reads to pick
-a keymap, so a zoxide row in a `consult-dir' prompt gets the zoxide
-actions rather than the plain file ones.  `consult--multi' keeps a datum
-a candidate already carries, so it does not overwrite this with the
-source's own `:category' - and that category has to stay `file',
-`consult-dir--pick' knowing only `file' and `bookmark' when it turns the
-match back into a directory."
+  "Return the zoxide directories, each tagged `consult-zoxide-dir'."
+  ;; Embark reads the `multi-category' datum to choose a keymap, and
+  ;; `consult--multi' leaves a datum the candidate already carries alone.
+  ;; The tag therefore rides on the candidate, while the source keeps the
+  ;; `file' category that `consult-dir--pick' needs to open the match.
   (mapcar (lambda (path)
             (propertize path 'multi-category (cons 'consult-zoxide-dir path)))
           (consult-zoxide-directories)))
@@ -346,21 +335,13 @@ match back into a directory."
      :face     consult-file
      :enabled  ,(lambda () (executable-find consult-zoxide-executable))
      :items    consult-zoxide--source-items)
-  "Zoxide source for `consult-dir-sources'.
-Appended as soon as `consult-dir' loads, so it needs no setting up.")
+  "Zoxide source for `consult-dir-sources'.")
 
 ;;;###autoload
 (defun consult-zoxide-consult-dir-register ()
-  "Append the zoxide source to `consult-dir-sources'."
+  "Append the zoxide source to `consult-dir-sources'.
+Nothing registers itself; call this after `consult-dir' loads."
   (add-to-list 'consult-dir-sources 'consult-zoxide-directory-source t))
-
-;; Same arrangement as the Embark integration: the cookie copies this into
-;; the generated autoloads, so the source appears for anyone who has
-;; `consult-dir' without a manual require, and nothing here loads until
-;; `consult-dir' itself does.
-;;;###autoload
-(with-eval-after-load 'consult-dir
-  (consult-zoxide-consult-dir-register))
 
 (provide 'consult-zoxide)
 ;;; consult-zoxide.el ends here

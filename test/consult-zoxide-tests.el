@@ -146,7 +146,13 @@
   (it "is idempotent"
     (consult-zoxide-consult-dir-register)
     (consult-zoxide-consult-dir-register)
-    (expect (length consult-dir-sources) :to-equal 1)))
+    (expect (length consult-dir-sources) :to-equal 1))
+
+  (it "registers nothing of its own accord"
+    ;; installing a package must not reach into consult-dir; only an
+    ;; explicit `consult-zoxide-consult-dir-register' may
+    (load (locate-library "consult-zoxide") nil t)
+    (expect consult-dir-sources :to-be nil)))
 
 (describe "consult-zoxide--source-items"
   (before-each

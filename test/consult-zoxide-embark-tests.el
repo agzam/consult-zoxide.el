@@ -13,6 +13,10 @@
 (require 'consult-zoxide)
 (require 'consult-zoxide-embark)
 
+;; Registration is opt-in, so the specs below that read Embark's variables
+;; have to ask for it, the way a user's config does.
+(consult-zoxide-embark-register)
+
 (describe "consult-zoxide-embark-register"
   :var (keymap-alist multitarget post-hooks quit-after parent)
 
@@ -117,12 +121,17 @@
     (consult-zoxide-embark--restart)
     (expect 'embark--restart :not :to-have-been-called)))
 
-(describe "the Embark autoload hook"
-  (it "has already registered, Embark being loaded"
-    ;; the ;;;###autoload (with-eval-after-load 'embark ...) form fires on
-    ;; require when Embark is present, so no manual setup is needed
-    (expect (alist-get 'consult-zoxide-dir embark-keymap-alist)
-            :to-be 'consult-zoxide-embark-map)))
+(describe "loading the file"
+  (it "registers nothing of its own accord"
+    ;; installing a package must not reach into Embark; only an explicit
+    ;; `consult-zoxide-embark-register' from the user's config may
+    (let ((embark-keymap-alist nil)
+          (embark-multitarget-actions nil)
+          (embark-post-action-hooks nil))
+      (load (locate-library "consult-zoxide-embark") nil t)
+      (expect embark-keymap-alist :to-be nil)
+      (expect embark-multitarget-actions :to-be nil)
+      (expect embark-post-action-hooks :to-be nil))))
 
 (describe "a zoxide row in a consult-dir prompt"
   (before-each
