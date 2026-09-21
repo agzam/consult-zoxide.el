@@ -439,9 +439,11 @@
             :to-equal '(t "remove" "/gone/away")))
 
   (it "removes a single live directory, which is not the dangerous case"
+    (spy-on 'y-or-n-p :and-return-value nil)
     (consult-zoxide-remove live)
     (expect (spy-calls-args-for 'consult-zoxide--call 0)
-            :to-equal (list t "remove" live)))
+            :to-equal (list t "remove" live))
+    (expect 'y-or-n-p :not :to-have-been-called))
 
   (it "names the entry it removed, rather than counting to one"
     (expect (consult-zoxide-remove "/gone/away")
@@ -462,26 +464,49 @@
     (expect (spy-calls-args-for 'consult-zoxide--call 0)
             :to-equal '(t "remove" "/gone/a" "/gone/b" "/gone/c")))
 
-  (it "refuses a bulk removal containing a live directory"
-    (expect (consult-zoxide-remove (list "/gone/a" live)) :to-throw 'user-error))
+  (it "asks nothing for a batch of vanished entries"
+    ;; the documented prune path, and the one that must stay unquestioned
+    (spy-on 'y-or-n-p :and-return-value nil)
+    (consult-zoxide-remove '("/gone/a" "/gone/b"))
+    (expect 'y-or-n-p :not :to-have-been-called))
 
-  (it "spawns nothing at all when it refuses"
-    (ignore-errors (consult-zoxide-remove (list "/gone/a" live)))
+  (it "asks before a bulk removal containing a live directory"
+    (spy-on 'y-or-n-p :and-return-value t)
+    (consult-zoxide-remove (list "/gone/a" live))
+    (expect 'y-or-n-p :to-have-been-called))
+
+  (it "removes the whole batch once the question is answered"
+    ;; the selected-and-act-all case: three live directories, one call
+    (let ((other (consult-zoxide-tests--dir "other")))
+      (spy-on 'y-or-n-p :and-return-value t)
+      (consult-zoxide-remove (list live other "/gone/a"))
+      (expect (spy-calls-args-for 'consult-zoxide--call 0)
+              :to-equal (list t "remove" live other "/gone/a"))))
+
+  (it "spawns nothing when the question is declined"
+    (spy-on 'y-or-n-p :and-return-value nil)
+    (expect (consult-zoxide-remove (list "/gone/a" live)) :to-throw 'user-error)
     (expect 'consult-zoxide--call :not :to-have-been-called))
 
-  (it "refuses even when every path is live"
-    (expect (consult-zoxide-remove (list live live)) :to-throw 'user-error))
+  (it "asks even when every path is live"
+    (spy-on 'y-or-n-p :and-return-value t)
+    (consult-zoxide-remove (list live live))
+    (expect 'y-or-n-p :to-have-been-called))
 
-  (it "counts the live paths in the refusal"
+  (it "counts the batch and its live paths in the question"
+    ;; the count is the whole protection: a mis-narrowed act-all shows a
+    ;; number nothing deliberate would produce
     (let ((other (consult-zoxide-tests--dir "other")))
-      (expect (condition-case err
-                  (consult-zoxide-remove (list live other "/gone"))
-                (user-error (error-message-string err)))
-              :to-match "2 live directories")))
+      (spy-on 'y-or-n-p :and-return-value t)
+      (consult-zoxide-remove (list live other "/gone"))
+      (expect (car (spy-calls-args-for 'y-or-n-p 0))
+              :to-equal "Remove 3 zoxide entries, 2 of them live? ")))
 
   (it "treats a remote path as live rather than reaching over the network"
-    (expect (consult-zoxide-remove '("/ssh:host:/srv" "/gone/a"))
-            :to-throw 'user-error))
+    (spy-on 'y-or-n-p :and-return-value t)
+    (consult-zoxide-remove '("/ssh:host:/srv" "/gone/a"))
+    (expect (car (spy-calls-args-for 'y-or-n-p 0))
+            :to-match "1 of them live"))
 
   (it "accepts a one element list, which is how embark hands over a target"
     (consult-zoxide-remove '("/gone/a"))

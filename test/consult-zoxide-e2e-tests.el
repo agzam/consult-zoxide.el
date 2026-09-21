@@ -190,22 +190,26 @@
         (consult-zoxide-remove (list a b))
         (expect (consult-zoxide-e2e--paths t) :to-equal (list keep))))
 
-    (it "refuses a bulk removal holding a live directory"
-      (let ((gone (consult-zoxide-e2e--dir "gone"))
-            (live (consult-zoxide-e2e--dir "live")))
-        (consult-zoxide-e2e--add gone live)
-        (delete-directory gone t)
-        (expect (consult-zoxide-remove (list gone live)) :to-throw 'user-error)))
-
-    (it "leaves the database completely intact when it refuses"
+    (it "leaves the database completely intact when the question is declined"
       ;; the whole point of the guard: a mis-narrowed act-all changes nothing
       (let ((gone (consult-zoxide-e2e--dir "gone"))
             (live (consult-zoxide-e2e--dir "live")))
         (consult-zoxide-e2e--add gone live)
         (delete-directory gone t)
-        (ignore-errors (consult-zoxide-remove (list gone live)))
+        (spy-on 'y-or-n-p :and-return-value nil)
+        (expect (consult-zoxide-remove (list gone live)) :to-throw 'user-error)
         (expect (sort (consult-zoxide-e2e--paths t) #'string<)
                 :to-equal (sort (list gone live) #'string<))))
+
+    (it "really drops a batch of live directories once confirmed"
+      ;; the selected-then-act-all case, against the real database
+      (let ((one (consult-zoxide-e2e--dir "one"))
+            (two (consult-zoxide-e2e--dir "two"))
+            (keep (consult-zoxide-e2e--dir "keep")))
+        (consult-zoxide-e2e--add one two keep)
+        (spy-on 'y-or-n-p :and-return-value t)
+        (consult-zoxide-remove (list one two))
+        (expect (consult-zoxide-e2e--paths t) :to-equal (list keep))))
 
     (it "reports failure instead of pretending, for an entry it never held"
       (consult-zoxide-e2e--add (consult-zoxide-e2e--dir "one"))

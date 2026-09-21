@@ -149,24 +149,48 @@
       (expect (keymap-lookup keymap "\\") :to-be #'consult-zoxide-remove))))
 
 (describe "embark-act-all against the removal guard"
-  :var (tmp live)
+  :var (tmp live other)
 
   (before-each
     (setq tmp (make-temp-file "czox-embark" t))
     (setq live (expand-file-name "live" tmp))
-    (make-directory live t))
+    (setq other (expand-file-name "other" tmp))
+    (make-directory live t)
+    (make-directory other t)
+    (spy-on 'consult-zoxide--call :and-return-value 0))
 
   (after-each (delete-directory tmp t))
 
   (it "takes a whole batch of vanished entries in one call"
     ;; embark hands multi-target actions the list of candidates
-    (spy-on 'consult-zoxide--call :and-return-value 0)
     (consult-zoxide-remove (list "/gone/a" "/gone/b"))
     (expect (spy-calls-count 'consult-zoxide--call) :to-equal 1))
 
-  (it "still refuses when a live directory is among them"
-    (spy-on 'consult-zoxide--call :and-return-value 0)
-    (expect (consult-zoxide-remove (list "/gone/a" live)) :to-throw 'user-error)
-    (expect 'consult-zoxide--call :not :to-have-been-called)))
+  (it "removes a selected batch of live directories, once confirmed"
+    ;; the whole reported bug: act-all hands the multi-target action every
+    ;; selected candidate at once, and the guard used to reject the lot
+    (spy-on 'y-or-n-p :and-return-value t)
+    (embark--act #'consult-zoxide-remove
+                 (list :type 'consult-zoxide-dir
+                       :candidates (list live other)))
+    (expect (spy-calls-args-for 'consult-zoxide--call 0)
+            :to-equal (list t "remove" live other)))
+
+  (it "leaves the batch alone when the question is declined"
+    (spy-on 'y-or-n-p :and-return-value nil)
+    (expect (embark--act #'consult-zoxide-remove
+                         (list :type 'consult-zoxide-dir
+                               :candidates (list live other)))
+            :to-throw 'user-error)
+    (expect 'consult-zoxide--call :not :to-have-been-called))
+
+  (it "asks nothing of a single target, embark wrapping it in a list"
+    ;; the `\' key on one row: embark--act fills :candidates itself
+    (spy-on 'y-or-n-p :and-return-value nil)
+    (embark--act #'consult-zoxide-remove
+                 (list :type 'consult-zoxide-dir :target live))
+    (expect 'y-or-n-p :not :to-have-been-called)
+    (expect (spy-calls-args-for 'consult-zoxide--call 0)
+            :to-equal (list t "remove" live))))
 
 ;;; consult-zoxide-embark-tests.el ends here

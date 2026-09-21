@@ -9,7 +9,7 @@ Initial release.
 - Annotations: frecency score on every row, plus the branch for git checkout roots, read straight out of ~HEAD~ and only for rows on screen. The branch is suppressed where it merely repeats the directory name.
 - Narrowing on ~g~ git checkout roots, ~w~ worktrees, ~d~ entries whose directory is gone. Worktrees and submodules are told apart by reading the gitdir their ~.git~ file names, resolved against the directory to cope with the relative form submodules use.
 - Dead entries are excluded by default and included under a prefix argument, so they can be narrowed to and pruned.
-- ~consult-zoxide-remove~ drops entries in one batched call and refuses any bulk removal that includes a directory which still exists.
+- ~consult-zoxide-remove~ drops entries in one batched call, and asks first when a bulk removal includes a directory which still exists. The question names the batch size and the live count, a mis-narrowed ~embark-act-all~ being the case worth catching; a deliberate selection goes through on one keypress.
 - ~consult-zoxide-directories~ returns the bare path list, for feeding another completion source.
 - A self-registering ~consult-dir~ source, appended to ~consult-dir-sources~ under the ~z~ narrowing key once ~consult-dir~ loads, with no hard dependency on it. Its rows carry the Embark actions below, removal key included: they tag themselves ~consult-zoxide-dir~ for Embark while the source still declares the ~file~ category ~consult-dir--pick~ needs.
 - ~consult-zoxide-track-mode~ teaches zoxide about directories visited in Dired, and stays out of Dired's way where zoxide is not installed.

@@ -26,9 +26,10 @@
 ;; whose directory no longer exists.
 ;;
 ;; A prefix argument lists the vanished entries too, which is how they get
-;; pruned: narrow with `d', then `embark-act-all' the removal action.
-;; Removal refuses to take more than one still-existing directory at a
-;; time, so a mis-narrowed `embark-act-all' cannot empty the database.
+;; pruned: narrow with `d', then `embark-act-all' the removal action.  That
+;; batch goes through unquestioned, every directory in it being gone
+;; already; a batch holding directories that still exist is confirmed
+;; first, so a mis-narrowed `embark-act-all' cannot empty the database.
 ;;
 ;; Embark integration lives in the optional `consult-zoxide-embark'
 ;; file, which registers itself as soon as Embark loads.
@@ -267,11 +268,12 @@ is gone, so that narrowing to `d' collects them for removal."
 (defun consult-zoxide-remove (paths)
   "Drop PATHS from the zoxide database.
 
-Refuses any bulk removal that includes a directory which still exists.
-Bulk removal is for pruning entries whose directory is gone; without the
-guard a mis-narrowed `embark-act-all' would empty the database in one
+Asks before a bulk removal that includes a directory which still exists.
+Bulk removal is mostly for pruning entries whose directory is gone; a
+mis-narrowed `embark-act-all' would otherwise empty the database in one
 keystroke, and re-adding a path restores neither its score nor its
-recorded access time."
+recorded access time.  The question names the count, which is what a
+mis-narrow gives away."
   (let* ((paths (mapcar #'substring-no-properties (ensure-list paths)))
          (live (seq-filter (lambda (path)
                              (or (file-remote-p path) (file-directory-p path)))
@@ -279,9 +281,9 @@ recorded access time."
     (unless paths
       (user-error "No paths to remove"))
     (when (and (< 1 (length paths)) live)
-      (user-error "Refusing to remove %d live %s in bulk; remove one at a time"
-                  (length live)
-                  (if (length= live 1) "directory" "directories")))
+      (unless (y-or-n-p (format "Remove %d zoxide entries, %d of them live? "
+                                (length paths) (length live)))
+        (user-error "Canceled")))
     (with-temp-buffer
       ;; zoxide validates every path before it writes anything, so a
       ;; non-zero exit means the database was left untouched

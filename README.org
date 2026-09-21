@@ -52,11 +52,15 @@ From there, narrow with ~d~, then ~embark-act-all~ and the removal key. Removal 
 
 ** The guard
 
-~consult-zoxide-remove~ refuses any bulk removal that includes a directory which still exists.
+~consult-zoxide-remove~ asks before a bulk removal that includes a directory which still exists.
 
 This is not paranoia. ~embark-act-all~ with no selection acts on every candidate currently matching, and with ~embark-confirm-act-all~ set to nil a forgotten narrow would empty the entire database on one keystroke. There is no undo: re-adding a path restores neither its score nor its recorded access time.
 
-So one entry at a time is always allowed, dead or alive, and a batch is allowed only when every path in it is already gone. Anything else signals and touches nothing. The check re-stats at removal time rather than trusting the candidate's tag, so it holds however the function was reached.
+One entry at a time is never questioned, dead or alive, and neither is a batch whose every path is already gone - the prune above. Anything else asks, naming the size of the batch and how many of it are live, which is what a forgotten narrow gives away. Declining touches nothing.
+
+The question is there because a deliberate selection cannot be told from a mis-narrow by the time the action runs. ~embark-select~ keeps the selection in a variable local to the minibuffer, and under ~embark-quit-after-action~ the action runs from ~post-command-hook~ with that minibuffer already gone, so the action sees a list of paths and nothing else. The count is all the signal there is.
+
+The check re-stats at removal time rather than trusting the candidate's ~dead~ tag, so it holds however the function was reached.
 
 * Embark
 
